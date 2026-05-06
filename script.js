@@ -1,6 +1,6 @@
 document.addEventListener("DOMContentLoaded", () => {
 
-    // --- VIDEO SCRUBBING (REFACTORED) ---
+    // --- VIDEO SCRUBBING (OPTIMIZED) ---
     const scrollySections = [
         {
             containerId: 'hero-scrolly',
@@ -14,7 +14,7 @@ document.addEventListener("DOMContentLoaded", () => {
             videoId: 'projects-video',
             contentId: 'projects-container',
             startFade: 0.1,
-            endFade: 0.9 // Projects section stays visible longer
+            endFade: 0.9 
         }
     ];
 
@@ -24,49 +24,54 @@ document.addEventListener("DOMContentLoaded", () => {
         const content = document.getElementById(section.contentId);
 
         if (container && video) {
-            video.load();
+            // Ensure video plays smoothly
+            video.setAttribute('muted', '');
+            video.setAttribute('playsinline', '');
+            
             let ticking = false;
+
+            const updateScrub = () => {
+                const rect = container.getBoundingClientRect();
+                const viewHeight = window.innerHeight;
+                
+                if (rect.top < viewHeight && rect.bottom > 0) {
+                    const scrollPosition = -rect.top;
+                    const scrollableHeight = container.offsetHeight - viewHeight;
+
+                    let scrollFraction = scrollPosition / scrollableHeight;
+                    scrollFraction = Math.max(0, Math.min(1, scrollFraction));
+
+                    if (video.readyState >= 1) { // METADATA_LOADED
+                        video.currentTime = video.duration * scrollFraction;
+                    }
+
+                    if (content) {
+                        let opacity = 1;
+                        if (scrollFraction < section.startFade) {
+                            opacity = scrollFraction / section.startFade;
+                        } else if (scrollFraction > section.endFade) {
+                            opacity = 1 - ((scrollFraction - section.endFade) / (1 - section.endFade));
+                        }
+                        
+                        const transformY = -(scrollFraction * 50);
+                        content.style.opacity = Math.max(0, Math.min(1, opacity));
+                        content.style.transform = `translateY(${transformY}px)`;
+                    }
+                }
+            };
 
             window.addEventListener('scroll', () => {
                 if (!ticking) {
                     window.requestAnimationFrame(() => {
-                        const rect = container.getBoundingClientRect();
-                        const viewHeight = window.innerHeight;
-                        
-                        // Check if section is in viewport
-                        if (rect.top < viewHeight && rect.bottom > 0) {
-                            const scrollPosition = -rect.top;
-                            const scrollableHeight = container.offsetHeight - viewHeight;
-
-                            let scrollFraction = scrollPosition / scrollableHeight;
-                            scrollFraction = Math.max(0, Math.min(1, scrollFraction));
-
-                            if (!isNaN(video.duration) && video.duration > 0) {
-                                video.currentTime = video.duration * scrollFraction;
-                            }
-
-                            // Content fade/transform
-                            if (content) {
-                                // Fade in/out based on scroll fraction
-                                let opacity = 1;
-                                if (scrollFraction < section.startFade) {
-                                    opacity = scrollFraction / section.startFade;
-                                } else if (scrollFraction > section.endFade) {
-                                    opacity = 1 - ((scrollFraction - section.endFade) / (1 - section.endFade));
-                                }
-                                
-                                const transformY = -(scrollFraction * 50); // Subtle upward move
-                                
-                                content.style.opacity = Math.max(0, Math.min(1, opacity));
-                                content.style.transform = `translateY(${transformY}px)`;
-                            }
-                        }
-
+                        updateScrub();
                         ticking = false;
                     });
                     ticking = true;
                 }
-            });
+            }, { passive: true });
+
+            // Initial call
+            updateScrub();
         }
     });
 
@@ -77,11 +82,10 @@ document.addEventListener("DOMContentLoaded", () => {
         threshold: 0.15
     };
 
-    const observer = new IntersectionObserver((entries, obs) => {
+    const observer = new IntersectionObserver((entries) => {
         entries.forEach(entry => {
             if (entry.isIntersecting) {
                 entry.target.classList.add('visible');
-                obs.unobserve(entry.target);
             }
         });
     }, observerOptions);
